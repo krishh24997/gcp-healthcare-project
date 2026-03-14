@@ -1,23 +1,20 @@
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession,functions as f
 
-# Create Spark session
-spark = SparkSession.builder \
-                    .appName("CPT Codes Ingestion") \
-                    .getOrCreate()
+#create spark session 
+spark = SparkSession.builder.appName("CPT codes Ingestion").getOrCreate()
 
 # configure variables
-BUCKET_NAME = "healthcare-bucket-22032025"
+BUCKET_NAME = "healthcare-bucket-1648"
 CPT_BUCKET_PATH = f"gs://{BUCKET_NAME}/landing/cptcodes/*.csv"
-BQ_TABLE = "avd-databricks-demo.bronze_dataset.cpt_codes"
+BQ_TABLE = "gcp-new-1628.bronze_dataset.cpt_codes"
 TEMP_GCS_BUCKET = f"{BUCKET_NAME}/temp/"
 
-# read from cpt
-cptcodes_df = spark.read.csv(CPT_BUCKET_PATH, header=True)
+cptcodes_df= spark.read.csv(CPT_BUCKET_PATH,header=True)
 
-# replace spaces with underscore
-for col in cptcodes_df.columns:
-    new_col = col.replace(" ", "_").lower()
-    cptcodes_df = cptcodes_df.withColumnRenamed(col, new_col)
+#replace all space with the undesoure in the column headers
+for col in  cptcodes_df.columns:
+    new_col= col.replace(" ", "_").lower()
+    cptcodes_df= cptcodes_df.withColumnRenamed(col,new_col)
 
 # write to bigquery
 (cptcodes_df.write
@@ -26,3 +23,9 @@ for col in cptcodes_df.columns:
             .option("temporaryGcsBucket", TEMP_GCS_BUCKET)
             .mode("overwrite")
             .save())
+
+    
+
+
+
+
