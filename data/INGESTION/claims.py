@@ -1,25 +1,23 @@
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession,functions as f
 from pyspark.sql.functions import input_file_name, when
 
-# Create Spark session
-spark = SparkSession.builder \
-                    .appName("Healthcare Claims Ingestion") \
-                    .getOrCreate()
+#create spark session 
+spark = SparkSession.builder.appName("Healthcare claims ingestion").getOrCreate()
 
-# configure variables
-BUCKET_NAME = "healthcare-bucket-22032025"
-CLAIMS_BUCKET_PATH = f"gs://{BUCKET_NAME}/landing/claims/*.csv"
-BQ_TABLE = "avd-databricks-demo.bronze_dataset.claims"
-TEMP_GCS_BUCKET = f"{BUCKET_NAME}/temp/"
+#configure variables
+BUCKET_NAME= "healthcare-bucket-1648"
+CLAIMS_BUCKET_PATH=f"gs://{BUCKET_NAME}/landing/claims/*.csv"
+BQ_TABLE="gcp-new-1628.bronze_dataset.claims"
+TEMP_GCS_BUCKET=f"{BUCKET_NAME}/temp/"
 
-# read from claims source
-claims_df = spark.read.csv(CLAIMS_BUCKET_PATH, header=True)
+#read from claims source path 
+claims_df= spark.read.csv(CLAIMS_BUCKET_PATH,header=True)
+#claims_df=claims_df.withColumn("file_name",input_file_name())
 
 # adding hospital source for future reference
-claims_df = (claims_df
-                .withColumn("datasource", 
-                              when(input_file_name().contains("hospital2"), "hosb")
-                             .when(input_file_name().contains("hospital1"), "hosa").otherwise("None")))
+claims_df=claims_df.withColumn("datasource",
+                                  when (input_file_name().contains("hospital2"),"hosb")
+                                 .when (input_file_name().contains("hospital1"),"hosa").otherwise("none"))
 
 # dropping dupplicates if any
 claims_df = claims_df.dropDuplicates()
