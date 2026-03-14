@@ -1,52 +1,55 @@
-from google.cloud import storage, bigquery
+from google.cloud import storage ,bigquery
 import pandas as pd
-from pyspark.sql import SparkSession
+from pyspark.sql  import SparkSession
 import datetime
-import json
+import json 
 
-# Initialize GCS & BigQuery Clients
-storage_client = storage.Client()
-bq_client = bigquery.Client()
+#Initialize the GCS and bigquery clients
+storage_client=storage.Client()
+bq_client=bigquery.Client()
 
-# Initialize Spark Session
-spark = SparkSession.builder.appName("HospitalAMySQLToLanding").getOrCreate()
+#initialize the spark session
+spark = SparkSession.builder.appName("HospitalMySqlToLanding").getOrCreate()
 
-# Google Cloud Storage (GCS) Configuration
-GCS_BUCKET = "healthcare-bucket-22032025"
-HOSPITAL_NAME = "hospital-a"
-LANDING_PATH = f"gs://{GCS_BUCKET}/landing/{HOSPITAL_NAME}/"
-ARCHIVE_PATH = f"gs://{GCS_BUCKET}/landing/{HOSPITAL_NAME}/archive/"
-CONFIG_FILE_PATH = f"gs://{GCS_BUCKET}/configs/load_config.csv"
+#GCS configuration
+GCS_BUCKET= "healthcare-bucket-1648"
+HOSPITAL_NAME="hospital-a"
+LANDING_PATH=f"gs://{GCS_BUCKET}/landing/{HOSPITAL_NAME}/"
+ARCHIVE_PATH=f"gs://{GCS_BUCKET}/landing/{HOSPITAL_NAME}/archive/"
+CONFIG_FILE_PATH=f"gs://{GCS_BUCKET}/configs/load_config.csv"
 
-# BigQuery Configuration
-BQ_PROJECT = "avd-databricks-demo"
-BQ_AUDIT_TABLE = f"{BQ_PROJECT}.temp_dataset.audit_log"
-BQ_LOG_TABLE = f"{BQ_PROJECT}.temp_dataset.pipeline_logs"
-BQ_TEMP_PATH = f"{GCS_BUCKET}/temp/"  
 
-# MySQL Configuration
-MYSQL_CONFIG = {
-    "url": "jdbc:mysql://34.132.104.87:3306/hospital_a_db?useSSL=false&allowPublicKeyRetrieval=true",
-    "driver": "com.mysql.cj.jdbc.Driver",
-    "user": "myuser",
-    "password": "mypass"
+
+#BQ configuration
+BQ_PROJECT= "gcp-new-1628"
+BQ_AUDIT_TABLE=f"{BQ_PROJECT}.temp_dataset.audit_log"
+BQ_LOG_TABLE=f"{BQ_PROJECT}.temp_dataset.pipeline_logs"
+BQ_TEMP_PATH=f"{GCS_BUCKET}/temp/"
+
+
+#mysql configuration
+MYSQL_CONFIG={
+    "url":"jdbc:mysql://136.113.157.225:3306/hospital_a_db?useSSL=false&allowPublicKeyRetrieval=true",
+    "driver":"com.mysql.cj.jdbc.Driver",
+    "user":"myuser",
+    "password":"Mypass@123" 
 }
 
-##------------------------------------------------------------------------------------------------------------------##
-# Logging Mechanism
-log_entries = []  # Stores logs before writing to GCS
+#################################################################################################
+#logging mechnanism
+log_entries=[] #stores the logs before writing to GCS 
 
-def log_event(event_type, message, table=None):
-    """Log an event and store it in the log list"""
-    log_entry = {
+def log_event(event_type,message,table=None):
+    """ Log an event and store it into the log list """
+    log_entry={
         "timestamp": datetime.datetime.now().isoformat(),
         "event_type": event_type,
-        "message": message,
-        "table": table
+        "message":message,
+        "table":table
     }
     log_entries.append(log_entry)
-    print(f"[{log_entry['timestamp']}] {event_type} - {message}")  # Print for visibility
-    
+    print(f"[{log_entry['timestamp']}] {event_type} - {message}") #print for visibility
+
 def save_logs_to_gcs():
     """Save logs to a JSON file and upload to GCS"""
     log_filename = f"pipeline_log_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.json"
@@ -62,7 +65,7 @@ def save_logs_to_gcs():
     blob.upload_from_string(json_data, content_type="application/json")
 
     print(f"✅ Logs successfully saved to GCS at gs://{GCS_BUCKET}/{log_filepath}")
-
+    
 def save_logs_to_bigquery():
     """Save logs to BigQuery"""
     if log_entries:
@@ -73,10 +76,7 @@ def save_logs_to_bigquery():
             .mode("append") \
             .save()
         print("✅ Logs stored in BigQuery for future analysis")
-    
-##------------------------------------------------------------------------------------------------------------------##
-
-# Function to Move Existing Files to Archive
+###################################################################################################
 def move_existing_files_to_archive(table):
     blobs = list(storage_client.bucket(GCS_BUCKET).list_blobs(prefix=f"landing/{HOSPITAL_NAME}/{table}/"))
     existing_files = [blob.name for blob in blobs if blob.name.endswith(".json")]
@@ -101,24 +101,7 @@ def move_existing_files_to_archive(table):
         source_blob.delete()
 
         log_event("INFO", f"Moved {file} to {archive_path}", table=table)
-        
-##------------------------------------------------------------------------------------------------------------------##
-
-# Function to Get Latest Watermark from BigQuery Audit Table
-def get_latest_watermark(table_name):
-    query = f"""
-        SELECT MAX(load_timestamp) AS latest_timestamp
-        FROM `{BQ_AUDIT_TABLE}`
-        WHERE tablename = '{table_name}' and data_source = "hospital_a_db"
-    """
-    query_job = bq_client.query(query)
-    result = query_job.result()
-    for row in result:
-        return row.latest_timestamp if row.latest_timestamp else "1900-01-01 00:00:00"
-    return "1900-01-01 00:00:00"
-
-##------------------------------------------------------------------------------------------------------------------##
-
+###################################################################################################
 # Function to Extract Data from MySQL and Save to GCS
 def extract_and_save_to_landing(table, load_type, watermark_col):
     try:
@@ -162,22 +145,38 @@ def extract_and_save_to_landing(table, load_type, watermark_col):
 
     except Exception as e:
         log_event("ERROR", f"Error processing {table}: {str(e)}", table=table)
-##------------------------------------------------------------------------------------------------------------------##
+        
+###################################################################################################
 
-# Function to Read Config File from GCS
+# Function to Get Latest Watermark from BigQuery Audit Table
+def get_latest_watermark(table_name):
+    query = f"""
+        SELECT MAX(load_timestamp) AS latest_timestamp
+        FROM `{BQ_AUDIT_TABLE}`
+        WHERE tablename = '{table_name}' and data_source = "hospital_a_db"
+    """
+    query_job = bq_client.query(query)
+    result = query_job.result()
+    for row in result:
+        return row.latest_timestamp if row.latest_timestamp else "1900-01-01 00:00:00"
+    return "1900-01-01 00:00:00"
+###################################################################################################
+
+#function to read the config file from GCS
 def read_config_file():
-    df = spark.read.csv(CONFIG_FILE_PATH, header=True)
-    log_event("INFO", "✅ Successfully read the config file")
+    df= spark.read.csv(CONFIG_FILE_PATH,header=True)
+    log_event("INFO"," ✅ Sucessfully read the config file")
     return df
 
-# read config file
-config_df = read_config_file()
+#read config file
+config_df=read_config_file()
 
 for row in config_df.collect():
-    if row["is_active"] == '1' and row["datasource"] == "hospital_a_db": 
-        db, src, table, load_type, watermark, _, targetpath = row
+    if row["is_active"]=='1' and row["database"]=="hospital-a-mysql-db":
+        db,src,table,load_type,watermark,_,targetpath=row
         move_existing_files_to_archive(table)
-        extract_and_save_to_landing(table, load_type, watermark)
-        
+        extract_and_save_to_landing(table,load_type,watermark)  
+
+
 save_logs_to_gcs()
 save_logs_to_bigquery()
